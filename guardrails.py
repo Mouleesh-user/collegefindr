@@ -282,6 +282,37 @@ def detect_negation_constraints(text: str) -> List[str]:
     return out
 
 
+# Personalized recommendation / list requests — these still need concrete
+# inputs, so they are NOT treated as informational.
+_RECOMMENDATION_SIGNALS = re.compile(
+    r"\b(recommend|suggest|shortlist|list (?:me |of )?colleges?|colleges? for me|"
+    r"which college.{0,20}\b(?:should|can)\s+i\b|where (?:should|can)\s+i\s+(?:apply|get|study)|"
+    r"best (?:college|option|one|fit)\b|good college|want a college|i want to study|"
+    r"give me .*colleges?)\b",
+    re.IGNORECASE,
+)
+
+# General / conceptual questions that can be answered without the user's
+# personal marks/budget/location.
+_INFORMATIONAL_SIGNALS = re.compile(
+    r"(^\s*(?:what|what's|whats|how|why|when|who|whom|which|does|do|is|are|can|should)\b)"
+    r"|\b(?:explain|difference between|compare|tell me about|meaning of|eligibility|"
+    r"syllabus|exam pattern|counsel+ing process|how to apply|what is the process|versus|vs\.?)\b",
+    re.IGNORECASE,
+)
+
+
+def is_informational_query(message: str) -> bool:
+    """True for general/conceptual questions that don't need the user's personal
+    marks/budget/location (e.g. "What is JEE Main?", "Difference between NIT and IIT?").
+    Recommendation/list requests return False so the input-gate still applies."""
+    if not message:
+        return False
+    if _RECOMMENDATION_SIGNALS.search(message):
+        return False
+    return bool(_INFORMATIONAL_SIGNALS.search(message))
+
+
 def extract_inputs_from_message(message: str) -> Dict[str, Any]:
     """Best-effort regex extraction of marks / budget / course / location."""
     extracted: Dict[str, Any] = {}
@@ -368,11 +399,11 @@ def validate_structured_inputs(inputs: Dict[str, Any]) -> ValidationResult:
 
 
 def has_minimum_inputs(inputs: Dict[str, Any]) -> bool:
-    """At least 2 of {marks, budget, course, location} should be present for a useful answer."""
+    """At least 1 of {marks, budget, course, location} should be present for a useful answer."""
     if not inputs:
         return False
     keys = ("marks_percent", "budget_inr", "course", "location")
-    return sum(1 for k in keys if inputs.get(k) not in (None, "")) >= 2
+    return sum(1 for k in keys if inputs.get(k) not in (None, "")) >= 1
 
 
 # --------------------------------------------------------------------------- #

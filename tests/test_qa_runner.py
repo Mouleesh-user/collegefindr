@@ -129,10 +129,18 @@ def t_tc21_validate_negative_budget():
     assert not r.ok
 
 def t_tc22_minimum_inputs_false():
-    assert not gr.has_minimum_inputs({"marks_percent": 80})
+    # Threshold is now 1 input: a single field is sufficient; only empty fails.
+    assert gr.has_minimum_inputs({"marks_percent": 80})
+    assert not gr.has_minimum_inputs({})
 
 def t_tc23_minimum_inputs_true():
     assert gr.has_minimum_inputs({"marks_percent": 80, "course": "cse"})
+
+def t_tc23b_informational_query():
+    assert gr.is_informational_query("What is JEE Main?")
+    assert gr.is_informational_query("Difference between NIT and IIT?")
+    assert not gr.is_informational_query("suggest engineering colleges")
+    assert not gr.is_informational_query("i want a college")
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +268,7 @@ CASES = [
     ("TC21-validate-budget-negative",   t_tc21_validate_negative_budget),
     ("TC22-min-inputs-one-only",        t_tc22_minimum_inputs_false),
     ("TC23-min-inputs-two",             t_tc23_minimum_inputs_true),
+    ("TC23b-informational-query",       t_tc23b_informational_query),
     ("TC24-invented-mars-campus",       t_tc24_invented_college_caught),
     ("TC25-known-college-passes",       t_tc25_known_college_passes),
     ("TC26-benign-main-campus",         t_tc26_benign_suffix_passes),

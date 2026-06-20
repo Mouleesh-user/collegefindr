@@ -1225,7 +1225,7 @@ def chat() -> Any:
         _persist_chat(user, context, message, gr.REFUSAL_IMPOSSIBLE_INPUT, audit)
         return _chat_envelope(gr.REFUSAL_IMPOSSIBLE_INPUT, context), 200
 
-    if not gr.has_minimum_inputs(merged_inputs):
+    if not gr.has_minimum_inputs(merged_inputs) and not gr.is_informational_query(message):
         audit["warnings"].append("insufficient_inputs")
         _persist_chat(user, context, message, gr.FALLBACK_INSUFFICIENT_INPUT, audit)
         return _chat_envelope(gr.FALLBACK_INSUFFICIENT_INPUT, context), 200

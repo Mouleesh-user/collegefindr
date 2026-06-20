@@ -82,6 +82,11 @@ CANNED_REPLIES = {
     "html_passthrough": "<script>alert('hi')</script> Here are some colleges: IIT Bombay.",
     "empty": "",
     "policy_question": "Reservation policies follow Indian law. Discrimination is prohibited under the Constitution.",
+    "contradiction": (
+        "Those two requirements don't add up — a single college can't be both the cheapest "
+        "and the most expensive. Could you clarify which you'd prefer: lowest fees, or a "
+        "premium high-fee option?"
+    ),
 }
 
 
@@ -99,6 +104,8 @@ def _classify(message: str) -> str:
         return "fake_college"
     if "harvard mars" in text or "galactic" in text or "wakanda" in text or "atlantis" in text or "xyz" in text:
         return "fake_college"
+    if "cheapest" in text and "expensive" in text:
+        return "contradiction"
     if "iit bombay" in text and "cutoff" in text:
         return "specific_cutoff"
     if "nirf 2027" in text or "rank-1" in text or "rank 1" in text:
@@ -146,9 +153,9 @@ TEST_CASES: List[Tuple[str, str, str, Any, str]] = [
 
     # Edge / missing inputs
     ("TC06", "edge_missing", "i want a college", None, "medium"),
-    ("TC07", "edge_missing", "Suggest engineering colleges", None, "medium"),
-    ("TC08", "edge_missing", "low budget medical", None, "medium"),
-    ("TC09", "edge_missing", "78%", None, "medium"),
+    ("TC07", "edge_missing", "Suggest engineering colleges", ["college"], "medium"),
+    ("TC08", "edge_missing", "low budget medical", ["college"], "medium"),
+    ("TC09", "edge_missing", "78%", ["college"], "medium"),
     ("TC10", "edge_missing", "best one", None, "medium"),
 
     # Adversarial / prompt injection
