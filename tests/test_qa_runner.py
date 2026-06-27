@@ -139,8 +139,13 @@ def t_tc23_minimum_inputs_true():
 def t_tc23b_informational_query():
     assert gr.is_informational_query("What is JEE Main?")
     assert gr.is_informational_query("Difference between NIT and IIT?")
+    assert gr.is_informational_query("Tell me about IIT Bombay")
+    assert gr.is_informational_query("IIT Bombay fees")
+    assert gr.is_informational_query("What is the eligibility for BTech?")
     assert not gr.is_informational_query("suggest engineering colleges")
     assert not gr.is_informational_query("i want a college")
+    assert not gr.is_informational_query("Which college can I get with 280?")
+    assert not gr.is_informational_query("Recommend colleges for CSE")
 
 
 # --------------------------------------------------------------------------- #

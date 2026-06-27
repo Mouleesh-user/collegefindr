@@ -29,7 +29,7 @@ services:
       - key: RATELIMIT_STORAGE_URI
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://mouleesh-user.github.io,https://moulesh-user.github.io
+        value: https://collegefindr-frontend.onrender.com,https://mouleesh-user.github.io,https://moulesh-user.github.io
       - key: REQUIRE_ALLOWED_ORIGIN
         value: "1"
       - key: REQUIRE_CLIENT_API_KEY

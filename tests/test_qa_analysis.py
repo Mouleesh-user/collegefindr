@@ -86,6 +86,25 @@ class GuardrailUnitTests(unittest.TestCase):
         )
         self.assertIsNone(gr.detect_future_year("", today=anchor))
 
+    def test_informational_queries_do_not_need_profile_inputs(self) -> None:
+        for message in (
+            "What is JEE Main?",
+            "Tell me about IIT Bombay",
+            "IIT Bombay fees",
+            "What is the eligibility for BTech?",
+            "Difference between NIT and IIT",
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(gr.is_informational_query(message))
+
+        for message in (
+            "suggest engineering colleges",
+            "which college can I get with 280",
+            "recommend colleges for CSE",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(gr.is_informational_query(message))
+
     def test_TC16_negation_extraction(self) -> None:
         text = (
             "Suggest engineering colleges in Tamil Nadu except Anna University and "
@@ -276,6 +295,15 @@ class CollegeFindrAnalysisRegression(unittest.TestCase):
             )
         return rv.status_code, (rv.get_json() or {})
 
+    def _post_without_inputs(self, message: str) -> Tuple[int, Dict[str, Any]]:
+        with patch.object(app_module, "_get_openrouter_reply_with_history", adversarial_mock):
+            rv = self.client.post(
+                "/chat",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json={"message": message},
+            )
+        return rv.status_code, (rv.get_json() or {})
+
     # ---- TC-06 ---- #
     def test_TC06_ambiguous_marks_short_circuits_before_llm(self) -> None:
         status, body = self._post("I got 280, suggest colleges")
@@ -285,6 +313,22 @@ class CollegeFindrAnalysisRegression(unittest.TestCase):
         self.assertIn("scale", reply)
         self.assertNotIn("rv college", reply)
         self.assertNotIn("iit bombay", reply)
+
+    def test_informational_query_without_inputs_reaches_llm(self) -> None:
+        status, body = self._post_without_inputs("What is JEE Main?")
+        self.assertEqual(status, 200)
+        reply = (body.get("reply") or "").lower()
+        self.assertNotIn("marks / percentile", reply)
+        self.assertNotIn("personalized college recommendations", reply)
+        self.assertIn("rv college", reply)
+
+    def test_informational_score_question_does_not_trigger_scale_clarification(self) -> None:
+        status, body = self._post_without_inputs("I got 280, what does that score mean in JEE Main?")
+        self.assertEqual(status, 200)
+        reply = (body.get("reply") or "").lower()
+        self.assertNotIn("maximum possible", reply)
+        self.assertNotIn("right scale", reply)
+        self.assertIn("rv college", reply)
 
     # ---- TC-10 ---- #
     def test_TC10_future_year_short_circuits(self) -> None:

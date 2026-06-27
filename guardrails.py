@@ -286,7 +286,7 @@ def detect_negation_constraints(text: str) -> List[str]:
 # inputs, so they are NOT treated as informational.
 _RECOMMENDATION_SIGNALS = re.compile(
     r"\b(recommend|suggest|shortlist|list (?:me |of )?colleges?|colleges? for me|"
-    r"which college.{0,20}\b(?:should|can)\s+i\b|where (?:should|can)\s+i\s+(?:apply|get|study)|"
+    r"(?:which|what) college.{0,20}\b(?:should|can)\s+i\b|where (?:should|can)\s+i\s+(?:apply|get|study)|"
     r"best (?:college|option|one|fit)\b|good college|want a college|i want to study|"
     r"give me .*colleges?)\b",
     re.IGNORECASE,
@@ -296,8 +296,23 @@ _RECOMMENDATION_SIGNALS = re.compile(
 # personal marks/budget/location.
 _INFORMATIONAL_SIGNALS = re.compile(
     r"(^\s*(?:what|what's|whats|how|why|when|who|whom|which|does|do|is|are|can|should)\b)"
+    r"|\b(?:what\s+(?:is|are|does|do)|how\s+(?:does|do|to|can)|why\s+(?:is|are|does|do)|"
+    r"when\s+(?:is|are|does|do)|does|do|is|are)\b"
     r"|\b(?:explain|difference between|compare|tell me about|meaning of|eligibility|"
-    r"syllabus|exam pattern|counsel+ing process|how to apply|what is the process|versus|vs\.?)\b",
+    r"fees?|fee structure|cutoff|cut[- ]?off|closing rank|opening rank|deadline|placements?|"
+    r"admission process|syllabus|exam pattern|counsel+ing process|how to apply|"
+    r"what is the process|versus|vs\.?)\b",
+    re.IGNORECASE,
+)
+_INFORMATIONAL_LOOKUP = re.compile(
+    r"\b(?:iit|nit|iiit|iim|aiims|bits|nlu|jee|neet|cuet|gate|cat|mat|cmat|"
+    r"college|university|institute|admission|btech|mbbs|mba|law|cse)\b"
+    r".{0,80}\b(?:fees?|fee structure|cutoff|cut[- ]?off|closing rank|opening rank|"
+    r"deadline|placements?|eligibility|syllabus|exam pattern|admission process)\b"
+    r"|\b(?:fees?|fee structure|cutoff|cut[- ]?off|closing rank|opening rank|"
+    r"deadline|placements?|eligibility|syllabus|exam pattern|admission process)\b"
+    r".{0,80}\b(?:iit|nit|iiit|iim|aiims|bits|nlu|jee|neet|cuet|gate|cat|mat|cmat|"
+    r"college|university|institute|admission|btech|mbbs|mba|law|cse)\b",
     re.IGNORECASE,
 )
 
@@ -310,7 +325,7 @@ def is_informational_query(message: str) -> bool:
         return False
     if _RECOMMENDATION_SIGNALS.search(message):
         return False
-    return bool(_INFORMATIONAL_SIGNALS.search(message))
+    return bool(_INFORMATIONAL_SIGNALS.search(message) or _INFORMATIONAL_LOOKUP.search(message))
 
 
 def extract_inputs_from_message(message: str) -> Dict[str, Any]:
@@ -705,14 +720,14 @@ def validate_response(
 # --------------------------------------------------------------------------- #
 
 FALLBACK_INSUFFICIENT_INPUT = (
-    "I want to give you a recommendation I'm actually confident about. "
-    "Could you share a bit more so I can help you better?\n\n"
+    "For personalized college recommendations, I need a little more context. "
+    "Could you share any of these details?\n\n"
     "- **Marks / percentile** (and which exam — JEE / NEET / CUET / board)\n"
     "- **Course or field** you want to study\n"
     "- **Approximate budget per year** (₹)\n"
     "- **Preferred locations** (city or state)\n\n"
-    "*I will only recommend colleges I'm confident exist, and I'll always ask you to "
-    "verify fees, cutoffs, and deadlines on the official website.*"
+    "*For general questions about exams, courses, colleges, fees, or admission processes, "
+    "you can ask directly without sharing marks or budget.*"
 )
 
 REFUSAL_PROMPT_INJECTION = (

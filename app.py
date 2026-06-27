@@ -83,6 +83,8 @@ def _get_allowed_origins() -> List[str]:
 
 
 def _is_valid_origin_format(origin: str) -> bool:
+    if origin == "null":
+        return True
     parsed = urlparse(origin)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
@@ -954,49 +956,64 @@ def audit_request(response: Any) -> Any:
     started_at = getattr(g, "request_started_at", _utc_now())
     elapsed_ms = int(max(((_utc_now() - started_at).total_seconds() * 1000), 0))
     current_user = getattr(g, "current_user", None)
+    request_path = request.path
+    skip_db_audit = request.method == "OPTIONS" or request_path.rstrip("/") in {"", "/ping", "/health"}
 
-    log_row = ApiRequestLog(
-        timestamp=started_at,
-        ip_address=_client_ip(),
-        method=request.method,
-        endpoint=request.path,
-        status_code=int(response.status_code),
-        user_id=current_user.id if current_user else None,
-        tokens_consumed=_safe_int(getattr(g, "tokens_consumed", 0), 0),
-        prompt_tokens=_safe_int(getattr(g, "prompt_tokens", 0), 0),
-        completion_tokens=_safe_int(getattr(g, "completion_tokens", 0), 0),
-        latency_ms=elapsed_ms,
-    )
+    log_data = {
+        "ip_address": _client_ip(),
+        "timestamp": started_at,
+        "method": request.method,
+        "endpoint": request_path,
+        "status_code": int(response.status_code),
+        "tokens_consumed": _safe_int(getattr(g, "tokens_consumed", 0), 0),
+        "prompt_tokens": _safe_int(getattr(g, "prompt_tokens", 0), 0),
+        "completion_tokens": _safe_int(getattr(g, "completion_tokens", 0), 0),
+        "latency_ms": elapsed_ms,
+    }
 
-    try:
-        db.session.add(log_row)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        app.logger.exception("Failed to write ApiRequestLog")
+    if not skip_db_audit:
+        log_row = ApiRequestLog(
+            timestamp=started_at,
+            ip_address=log_data["ip_address"],
+            method=log_data["method"],
+            endpoint=log_data["endpoint"],
+            status_code=log_data["status_code"],
+            user_id=current_user.id if current_user else None,
+            tokens_consumed=log_data["tokens_consumed"],
+            prompt_tokens=log_data["prompt_tokens"],
+            completion_tokens=log_data["completion_tokens"],
+            latency_ms=log_data["latency_ms"],
+        )
+
+        try:
+            db.session.add(log_row)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Failed to write ApiRequestLog")
 
     app.logger.info(
         "api_request ip=%s time=%s endpoint=%s method=%s status=%s bytes=%s tokens=%s prompt=%s completion=%s latency_ms=%s",
-        log_row.ip_address,
-        log_row.timestamp.isoformat(),
-        log_row.endpoint,
-        log_row.method,
-        log_row.status_code,
+        log_data["ip_address"],
+        log_data["timestamp"].isoformat(),
+        log_data["endpoint"],
+        log_data["method"],
+        log_data["status_code"],
         _safe_int(getattr(g, "request_size_bytes", 0), 0),
-        log_row.tokens_consumed,
-        log_row.prompt_tokens,
-        log_row.completion_tokens,
-        log_row.latency_ms,
+        log_data["tokens_consumed"],
+        log_data["prompt_tokens"],
+        log_data["completion_tokens"],
+        log_data["latency_ms"],
     )
 
-    if request.path.rstrip("/") == "/chat":
+    if request_path.rstrip("/") == "/chat":
         app.logger.info(
             "chat_call ip=%s timestamp=%s endpoint=%s bytes=%s status=%s",
-            log_row.ip_address,
-            log_row.timestamp.isoformat(),
-            log_row.endpoint,
+            log_data["ip_address"],
+            log_data["timestamp"].isoformat(),
+            log_data["endpoint"],
             _safe_int(getattr(g, "request_size_bytes", 0), 0),
-            log_row.status_code,
+            log_data["status_code"],
         )
 
     return response
@@ -1196,9 +1213,11 @@ def chat() -> Any:
         _persist_chat(user, context, message, gr.REFUSAL_BIAS, audit)
         return _chat_envelope(gr.REFUSAL_BIAS, context), 200
 
+    informational_query = gr.is_informational_query(message)
+
     # TC-06: raw number with no scale tag -> force a scale clarification.
     ambiguous_score = gr.detect_ambiguous_marks(message)
-    if ambiguous_score is not None:
+    if ambiguous_score is not None and not informational_query:
         audit["warnings"].append(f"ambiguous_marks:{ambiguous_score}")
         app.logger.info("chat_clarify reason=ambiguous_marks user=%s score=%s", user.id, ambiguous_score)
         _persist_chat(user, context, message, gr.CLARIFY_AMBIGUOUS_MARKS, audit)
@@ -1225,7 +1244,7 @@ def chat() -> Any:
         _persist_chat(user, context, message, gr.REFUSAL_IMPOSSIBLE_INPUT, audit)
         return _chat_envelope(gr.REFUSAL_IMPOSSIBLE_INPUT, context), 200
 
-    if not gr.has_minimum_inputs(merged_inputs) and not gr.is_informational_query(message):
+    if not gr.has_minimum_inputs(merged_inputs) and not informational_query:
         audit["warnings"].append("insufficient_inputs")
         _persist_chat(user, context, message, gr.FALLBACK_INSUFFICIENT_INPUT, audit)
         return _chat_envelope(gr.FALLBACK_INSUFFICIENT_INPUT, context), 200
