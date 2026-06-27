@@ -62,6 +62,8 @@ let authToken = localStorage.getItem("collegefindr_auth_token") || "";
 let lastBackendWarmupAt = 0;
 let authRequestInFlight = false;
 let currentUser = null;
+const syncedMessageContexts = new Set();
+const syncMessageRequests = new Map();
 try {
     currentUser = JSON.parse(localStorage.getItem("collegefindr_user") || "null");
 } catch (error) {
@@ -164,6 +166,8 @@ function setAuthState(token, user) {
     // Reset cached UI state only when the authenticated identity actually changes.
     if (shouldResetUserScopedState) {
         clearStoredMessages();
+        syncedMessageContexts.clear();
+        syncMessageRequests.clear();
         navigationHistory = [];
         localStorage.removeItem("collegefindr_page_history");
         resetAllMessageContainers();
@@ -198,7 +202,7 @@ async function warmUpBackend(force = false, options = {}) {
 
     const now = Date.now();
     const warmupTtlMs = 2 * 60 * 1000;
-    if (!force && now - lastBackendWarmupAt < warmupTtlMs) return;
+    if (now - lastBackendWarmupAt < warmupTtlMs) return;
 
     try {
         await apiJson(API.ping || API.health, {
@@ -279,7 +283,10 @@ async function apiJson(url, options = {}) {
                     resolveWakeState();
                 }
 
-                const error = new Error(data.error || `Request failed with status ${response.status}`);
+                const errorMessage = response.status === 403 && /origin/i.test(data.error || "")
+                    ? "This frontend origin is not allowed by the backend."
+                    : data.error || `Request failed with status ${response.status}`;
+                const error = new Error(errorMessage);
                 error.status = response.status;
                 error.details = data.details || null;
                 throw error;
@@ -300,8 +307,7 @@ async function apiJson(url, options = {}) {
                 resolveWakeState();
 
                 const timeoutError = new Error(
-                    "Request timed out while contacting the backend. " +
-                    "If using Render, wait a few seconds and try again (cold start)."
+                    "The backend is taking too long to respond. It may be waking up."
                 );
                 timeoutError.status = 408;
                 throw timeoutError;
@@ -315,12 +321,7 @@ async function apiJson(url, options = {}) {
 
                 resolveWakeState();
 
-                const apiTarget = apiBaseUrl || window.location.origin;
-                const originInfo = isFileProtocol ? "file:// (origin: null)" : window.location.origin;
-                const networkError = new Error(
-                    `Could not reach the backend at ${apiTarget} from origin ${originInfo}. ` +
-                    "The service may be asleep, unavailable, or blocked by CORS."
-                );
+                const networkError = new Error("Could not reach the backend. Check connection or try again.");
                 networkError.status = 0;
                 throw networkError;
             }
@@ -632,15 +633,20 @@ function loadMessagesFromStorage(containerId) {
     }
 }
 
-async function syncMessagesFromServer(containerId) {
+async function syncMessagesFromServer(containerId, options = {}) {
     if (!authToken) return;
 
     const container = document.getElementById(containerId);
     if (!container) return;
+    if (!options.force && syncedMessageContexts.has(containerId)) return;
+    if (!options.force && syncMessageRequests.has(containerId)) {
+        return syncMessageRequests.get(containerId);
+    }
 
-    try {
+    const syncRequest = (async () => {
         const data = await apiJson(`${API.messages}/${encodeURIComponent(containerId)}`, { auth: true });
         const messages = Array.isArray(data.messages) ? data.messages : [];
+        syncedMessageContexts.add(containerId);
         if (messages.length === 0) return;
 
         container.innerHTML = "";
@@ -654,17 +660,31 @@ async function syncMessagesFromServer(containerId) {
         }
 
         saveMessagesToStorage(containerId);
+    })();
+
+    syncMessageRequests.set(containerId, syncRequest);
+
+    try {
+        await syncRequest;
     } catch (error) {
         if (error.status === 401) {
             logout();
             showErrorNotification("Session expired. Please log in again.");
         }
+    } finally {
+        syncMessageRequests.delete(containerId);
     }
 }
 
-async function syncAllChatContainers() {
+function syncVisibleChatContainer(pageId, options = {}) {
+    const containerId = PAGE_MESSAGE_CONTAINER[pageId];
+    if (!containerId) return Promise.resolve();
+    return syncMessagesFromServer(containerId, options);
+}
+
+async function syncAllChatContainers(options = {}) {
     const ids = Object.keys(MESSAGE_STORAGE_KEYS);
-    await Promise.all(ids.map((id) => syncMessagesFromServer(id)));
+    await Promise.all(ids.map((id) => syncMessagesFromServer(id, options)));
 }
 
 async function fetchChatReply(userMessage, context, options = {}) {
@@ -818,6 +838,9 @@ window.showPage = function showPage(pageId, options = {}) {
     const messageContainerId = PAGE_MESSAGE_CONTAINER[pageId];
     if (messageContainerId) {
         loadMessagesFromStorage(messageContainerId);
+        syncVisibleChatContainer(pageId).catch((error) => {
+            console.warn(`Failed to sync chat history for ${messageContainerId}`, error);
+        });
     }
 
     if (pageId === "settings-page") {
@@ -922,7 +945,7 @@ async function bootstrapAuthSession() {
     }
 
     try {
-        await syncAllChatContainers();
+        await syncMessagesFromServer("chat-messages");
     } catch (error) {
         console.warn("Failed to sync chat history during bootstrap", error);
     }
@@ -1020,7 +1043,7 @@ function bindAuthForms() {
                 setAuthState(data.token, data.user);
                 showSuccessNotification("Login successful");
                 showPage("chat-page");
-                syncAllChatContainers().catch((syncError) => {
+                syncVisibleChatContainer("chat-page").catch((syncError) => {
                     console.warn("Chat sync failed after login", syncError);
                 });
             } catch (error) {
@@ -1085,7 +1108,7 @@ function bindAuthForms() {
                 setAuthState(data.token, data.user);
                 showSuccessNotification("Account created successfully");
                 showPage("chat-page");
-                syncAllChatContainers().catch((syncError) => {
+                syncVisibleChatContainer("chat-page").catch((syncError) => {
                     console.warn("Chat sync failed after signup", syncError);
                 });
             } catch (error) {
