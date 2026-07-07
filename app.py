@@ -1231,6 +1231,17 @@ def chat() -> Any:
         _persist_chat(user, context, message, gr.CLARIFY_FUTURE_YEAR, audit)
         return _chat_envelope(gr.CLARIFY_FUTURE_YEAR, context), 200
 
+    unverified_institutions = gr.find_unverified_institution_mentions(message)
+    if unverified_institutions:
+        audit["warnings"].append(f"unverified_institution:{unverified_institutions[:3]}")
+        app.logger.info(
+            "chat_clarify reason=unverified_institution user=%s names=%s",
+            user.id,
+            unverified_institutions[:3],
+        )
+        _persist_chat(user, context, message, gr.CLARIFY_UNVERIFIED_INSTITUTION, audit)
+        return _chat_envelope(gr.CLARIFY_UNVERIFIED_INSTITUTION, context), 200
+
     structured = payload.get("inputs") if isinstance(payload.get("inputs"), dict) else {}
     extracted = gr.extract_inputs_from_message(message)
     merged_inputs = {**extracted, **{k: v for k, v in (structured or {}).items() if v not in (None, "")}}

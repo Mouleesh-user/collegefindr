@@ -445,6 +445,10 @@ _ACRONYM_LOC_RE = re.compile(
     r"\b(IIT|NIT|IIIT|IIM|AIIMS|BITS|NLU|NLS)\s+"
     r"((?:[A-Z][A-Za-z]{1,20})(?:\s+[A-Z][A-Za-z]{1,20}){0,3})"
 )
+_UNVERIFIED_INSTITUTION_QUERY = re.compile(
+    r"\b(?:exist|exists|real|confirm|verify|admissions?|fees?|placements?|cutoff|cut[- ]?off|compare|tell me about)\b",
+    re.IGNORECASE,
+)
 
 
 _BENIGN_SUFFIXES = {
@@ -501,6 +505,26 @@ def find_potentially_invented_colleges(reply: str, known: Optional[List[str]] = 
         seen.add(key)
         deduped.append(s)
     return deduped
+
+
+def find_unverified_institution_mentions(message: str, known: Optional[List[str]] = None) -> List[str]:
+    """Catch direct user questions about institutions not in the trusted list."""
+    if not message or not _UNVERIFIED_INSTITUTION_QUERY.search(message):
+        return []
+    known_norm = { _normalize_college_token(k) for k in (known if known is not None else load_known_colleges()) }
+    academic_suffixes = {
+        "cse", "cs", "ece", "eee", "mech", "mechanical", "civil", "chemical",
+        "general", "obc", "ews", "sc", "st", "cutoff", "fees", "placements",
+    }
+    filtered = []
+    for name in find_potentially_invented_colleges(message, known):
+        parts = _normalize_college_token(name).split()
+        while parts and parts[-1] in academic_suffixes:
+            parts.pop()
+        if " ".join(parts) in known_norm:
+            continue
+        filtered.append(name)
+    return filtered
 
 
 # --- New output-side enforcers (TC-16, TC-22, TC-31/33/35/36) --- #
@@ -762,6 +786,12 @@ CLARIFY_FUTURE_YEAR = (
     "I can't tell you cutoffs or fees for a year that hasn't happened yet — those numbers "
     "don't exist until the counselling cycle closes. The most recent verified cycle is the "
     "previous year's. Want me to share that instead, or talk about how cutoffs have trended?"
+)
+
+CLARIFY_UNVERIFIED_INSTITUTION = (
+    "I could not verify that institution in the college data I trust. It may not exist, "
+    "or the name may be written differently. Please verify it on an official UGC, AICTE, JoSAA, "
+    "or institution website before relying on it."
 )
 
 GENDER_INVARIANCE_INSTRUCTION = (
