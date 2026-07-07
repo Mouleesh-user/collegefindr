@@ -48,7 +48,7 @@ Update this value if the backend Render service URL changes.
 
 ## Deploy
 
-This repo is configured as a Render static site through `render.yaml`.
+The root `../render.yaml` defines the Render static site.
 
 ```yaml
 staticPublishPath: .
@@ -56,6 +56,6 @@ staticPublishPath: .
 
 Push to the branch Render watches to deploy.
 
-## Related Repo
+## Monorepo
 
-The backend is maintained separately in the `collegefindr-backend` repo.
+The Flask backend lives in `../backend`.

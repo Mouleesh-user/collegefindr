@@ -1,0 +1,41 @@
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+
+# Databases / local data
+*.db
+*.sqlite
+*.sqlite3
+backend/instance/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test artifacts
+backend/tests/test_results.json
+backend/tests/test_qa_results.json
+pytest-cache-files-*/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local assistant/project instructions
+CLAUDE.md
