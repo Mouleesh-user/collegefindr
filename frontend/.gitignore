@@ -1,0 +1,27 @@
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Claude Code project instructions
+CLAUDE.md
