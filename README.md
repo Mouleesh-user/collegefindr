@@ -35,3 +35,7 @@ python tests/test_qa_runner.py
 ## Deploy
 
 `render.yaml` defines the Render web service. Push to the branch Render watches; gunicorn is launched with the command in `render.yaml`.
+
+## Related Repo
+
+The static frontend is maintained separately in the `collegefindr-frontend` repo. Make sure `ALLOWED_ORIGINS` includes the deployed frontend URL.
